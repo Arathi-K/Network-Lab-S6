@@ -1,0 +1,220 @@
+							
+							﻿DESIGN DOCUMENT 
+						===========================
+
+
+
+SENDER/CLIENT PSEUDO CODE:
+==========================
+
+IMPORT/INCLUDE ALL THE NECESSARY LIBRARIES INCLUDING sys/socket.h,,netinet/in.h,arpa/inet.h,pthread.h,unistd.h
+
+create structure packet_t including the type,seq_num,payload and trailer
+
+Global variables: 
+         packet_t packet
+	 int sockfd
+	 struct sockaddr_in servaddr
+         sem_t mutex
+
+main():
+     Create UDP socket using socket function
+     Set server and port address
+
+
+    Initialize semaphore variable(mutex1) to 1
+    Create 2 threads:
+                1 for sending packets of type1
+                2nd for sending packets of type2
+    Wait for these threads to finish using pthread_join function
+    Destroy mutex1
+    Close the socket file descriptor variable
+
+
+
+
+Function for sending packets of type 1:
+     while( true):
+        sleep for 100ms using usleep function
+        Lock semaphore variable mutex1
+        packet.type = 1
+        Packet.seq_num++
+        packet.trailer = 0
+        Set payload of the packet to be character B for all packets of type 1 to differtiate it from         
+        type 2 using memset fuction
+        for i=0 to packetsize-1 by 1
+               packet.trailer ^= packet.payload[i]
+        Send the packet to the server address using sendto function
+        Print the details
+        Unlock mutex1
+     
+Function for sending packets of type 2:
+     while(true):
+        sleep for 150ms using usleep function
+        Lock mutex1
+        packet.type = 2
+        Packet.seq_num++
+        packet.trailer = 0
+        Set payload of the packet to be character C for all packets of type 2 to differtiate it from         
+        type 1 using memset fuction
+        //Setting the trailer to be the checksum of the payload that we are sending
+        for i=0 to packetsize-1 by 1
+              packet.trailer ^= packet.payload[i]
+        Send the packet to the server address using sendto function        
+        Print the details
+        Unlock mutex1
+
+
+
+
+==========================================================================================================================================
+
+SERVER(RECEIVER) PSEUDO CODE:
+(using queue)
+
+
+IMPORT/INCLUDE ALL THE NECESSARY LIBRARIES INCLUDING sys/socket.h,,netinet/in.h,arpa/inet.h,pthread.h,unistd.h
+
+create structure packet_t including the type,seq_num,payload and trailer
+    
+Structure queue:
+    packet_t arr[9999] //to store the packets
+    int p1 //points to the index from where packet of type 1 has to be searched
+    int p2 //points to the index from where packet of type 2 has to be searched
+    int tail
+
+
+Globallly declared:
+	type1_count = 0
+	type2_count = 0
+	sem_t mutex1
+	queue Q
+
+main():
+        Create a UDP socket.
+        Set server and port addresses
+        Bind these to the created socket.
+        Initialize semaphore value to 1.
+        Allocate space for a queue Q(declare globally) to keep the received packets,initialize the queue attributes.
+        Create 4 threads:
+                1 for receiving packets and checking for errors in the received packet
+                2nd for processing packets of type1
+                3rd for processing packets of type2
+                4th for printing the total number of packets of type1, and total number of packets of type 2 every 300ms
+
+
+        Wait for all packets to be received and printed
+        Destroy the created semaphores
+        Close the socket
+
+
+
+
+Function for thread1(receive packets and check for errors):
+	while(True):
+		Receive packet from the client
+		checksum=0
+		For i=0 to PACKET_SIZE
+			checksum= checksum ^packet.payload[i]
+		If checksum != packet.trailer
+			Print “Error:Packet checksum doesnot match”
+		Add the packet to the queue 
+
+
+        
+Function for thread2( processing packet 1):
+	while(True):
+		If queue is not empty
+			Lock semaphore
+			While Q.arr[Q.p1].type!=1 and Q.p1!=Q.tail
+				Q.p1++
+			If Q.arr[Q.p1].type==1
+				Type1_count++
+				Print the type, sequence number and the payload of the packet
+				Q.p1++
+			Unlock semaphore
+
+
+
+
+Function for thread3( processing packet 2):
+	while(True):
+		If queue is not empty
+	Lock semaphore
+	While Q.arr[Q.p2].type!=2 and Q.p2!=Q.tail
+		Q.p2++
+	If Q.arr[Q.p2].type==2
+		Type2_count++
+		Print the type, sequence number and the payload of the packet
+		Q.p2++
+	Unlock semaphore
+
+
+Function for thread4( printing):
+        while(True):
+                Sleep for 300 ms
+                Print type1_count
+                Print type2_count
+                
+======================================================================================================================================
+(Without using queue):
+IMPORT/INCLUDE ALL THE NECESSARY LIBRARIES INCLUDING sys/socket.h,,netinet/in.h,arpa/inet.h,pthread.h,unistd.h
+
+create structure packet_t including the type,seq_num,payload and trailer
+    
+Globallly declared:
+	type1_count = 0
+	type2_count = 0
+	sem_t mutex1
+
+main():
+	Create a UDP socket.
+	Set server and port addresses
+	Bind these to the created socket.
+	Initialize semaphores type1_mutex and type2_mutex value to 1.
+	
+	Create 2 threads:
+		1 for receiving packets and checking for errors in the received packet
+		2nd for printing the total number of packets of type1, and total number of packets of type 2 every 300ms
+	Wait for all packets to be received and printed
+	Destroy the created semaphores
+	Close the socket
+
+
+Receive_packets function:
+	while(True):
+		Receive packet from the client
+		checksum=0
+		For i=0 to PACKET_SIZE
+			checksum= checksum ^packet.payload[i]
+		If checksum != packet.trailer
+			Print “Error:Packet checksum doesnot match”
+		switch(packet.type):
+			Case 1:Create pthread for processing type1 packets
+				break
+			Case 2:Create pthread for processing type2 packets
+				Break
+			Default: print Error
+	
+print_packet_count function:
+    while(True):
+	Sleep for 300 ms
+	Print type1_count
+	Print type2_count
+
+process_type1_packets(void* arg):
+    lock semaphore
+    get the packet from the argument of the function
+    print details
+    type1_count++;
+    unlock semaphore
+
+process_type2_packets(void* arg):
+    lock semaphore
+    get the packet from the argument of the function
+    print details
+    type2_count++;
+    unlock semaphore
+
+
+
